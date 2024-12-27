@@ -1,4 +1,19 @@
+from time import time
+
+def record_time(function):
+    def wrap(*args, **kwargs):
+        start_time = time()
+        function_return = function(*args, **kwargs)
+        diff = time() - start_time 
+        if diff != 0.0:
+            print(f"Elapsed time is {diff} in {function.__name__}")
+        return function_return
+    return wrap
+
 class NonogramSolver():
+    '''
+    In the given init values, columns are for vertical values, and rows are for horizontal values. 
+    '''
     def __init__(self, columns, rows):
         self._columns = columns
         self._rows = rows
@@ -22,7 +37,7 @@ class NonogramSolver():
         print('{}{}{}\n'.format(u'\u255A', u'\u2550' * self._x_sz * 2, u'\u255D'))
 
     def _get_total(self, lst):
-        return sum([sum(i) for i in lst])
+        return sum(sum(i) for i in lst)
     
     def _get_possible(self, lst, sz):
         __cr = []
@@ -42,6 +57,7 @@ class NonogramSolver():
                                 item)
         return __cr
 
+    # @record_time
     def _get_possibilities(self, lst, sz):
         colrow = []
         for cr in lst:
@@ -55,56 +71,51 @@ class NonogramSolver():
                 colrow.append([_cr])
             # So no single solution for this specific column yet, just get all possibilities
             else:
-                possibilities = self._get_possible(cr, sz)
-                colrow.append(possibilities)
+                colrow.append(self._get_possible(cr, sz))
         return colrow
 
+    # @record_time
     def _eliminate_possibilities_that_are_impossible(self, c, r, val):
-        for _c in self._columns_possibilities[c].copy():
-            if _c[r] != val:
-                self._columns_possibilities[c].remove(_c)
-        for _r in self._rows_possibilities[r].copy(): 
-            if _r[c] != val:
-                self._rows_possibilities[r].remove(_r)
+        self._columns_possibilities[c] = [possibility for possibility in self._columns_possibilities[c] if possibility[r] == val]
+        self._rows_possibilities[r] = [possibility for possibility in self._rows_possibilities[r] if possibility[c] == val]
 
+    # @record_time
     def _check_columns_for_obvious_moves(self):
         for j, _col in enumerate(self._columns_possibilities):
-            _c1 = [1 for _ in range(self._y_sz)] # To chech if all possible solutions have a 1 at a specific index
-            _c2 = [0 for _ in range(self._y_sz)] # To chech if all possible solutions have a 0 at a specific index
+            _c1 = [1] * self._y_sz  # To check if all possible solutions have a 1 at a specific index
+            _c2 = [0] * self._y_sz  # To check if all possible solutions have a 0 at a specific index
 
             for c in _col:
-                _c1 = [x & y for x, y in zip(_c1, c)] 
-                _c2 = [x | y for x, y in zip(_c2, c)] 
+                _c1 = [x & y for x, y in zip(_c1, c)]
+                _c2 = [x | y for x, y in zip(_c2, c)]
 
-            for i, val in enumerate(_c1):
-                if val == 1:
+            for i, (val1, val2) in enumerate(zip(_c1, _c2)):
+                if val1 == 1:
                     self._board[i][j] = 1
                     self._eliminate_possibilities_that_are_impossible(j, i, 1)
-
-            for i, val in enumerate(_c2):
-                if val == 0:
+                elif val2 == 0:
                     self._board[i][j] = 0
                     self._eliminate_possibilities_that_are_impossible(j, i, 0)
 
+    # @record_time
     def _check_row_for_obvious_moves(self):
         for j, _row in enumerate(self._rows_possibilities):
-            _r1 = [1 for _ in range(self._x_sz)] # To chech if all possible solutions have a 1 at a specific index
-            _r2 = [0 for _ in range(self._x_sz)] # To chech if all possible solutions have a 0 at a specific index
+            _r1 = [1] * self._x_sz # To chech if all possible solutions have a 1 at a specific index
+            _r2 = [0] * self._x_sz # To chech if all possible solutions have a 0 at a specific index
 
             for r in _row:
                 _r1 = [x & y for x, y in zip(_r1, r)] 
                 _r2 = [x | y for x, y in zip(_r2, r)] 
 
-            for i, val in enumerate(_r1):
-                if val == 1:
+            for i, (val1, val2) in enumerate(zip(_r1, _r2)):
+                if val1 == 1:
                     self._board[j][i] = 1
                     self._eliminate_possibilities_that_are_impossible(i, j, 1)
-
-            for i, val in enumerate(_r2):
-                if val == 0:
+                elif val2 == 0:
                     self._board[j][i] = 0
                     self._eliminate_possibilities_that_are_impossible(i, j, 0)
 
+    @record_time
     def solve(self):
         self._columns_possibilities = self._get_possibilities(self._columns, self._y_sz)
         self._rows_possibilities = self._get_possibilities(self._rows, self._x_sz)
@@ -112,7 +123,7 @@ class NonogramSolver():
         # match to the total of either column or row values summed together
         localboardtotal = 0
         iteration = 0
-        while self._boardtotal != localboardtotal: 
+        while self._boardtotal != localboardtotal and iteration < 10: 
             self._check_columns_for_obvious_moves()
             # self.print_solution()
             self._check_row_for_obvious_moves()
@@ -123,44 +134,37 @@ class NonogramSolver():
                 print("No unique solution possible! So trying to select one possible solution...")
                 found = False
                 for c in self._columns_possibilities:
-                    if found == True:
-                        break
                     if len(c) != 1:
+                        c[:] = c[:1]  # Select the first possibility and discard the rest
                         found = True
-                        for i in c[1:].copy():
-                            c.remove(i)                            
-                if found == False:
+                        break
+                if not found:
                     for r in self._rows_possibilities:
-                        if found == True:
-                            break
                         if len(r) != 1:
-                            found =True
-                            for i in r[1:].copy():
-                                r.remove(i)
+                            r[:] = r[:1]  # Select the first possibility and discard the rest
+                            break
                 iteration += 1
-                if iteration == 10:
-                    break
             localboardtotal = localboardtotaltmp
         return self._board
 
 if __name__ == '__main__':
-    n_c =[[6,4], [9,4], [12,5], [20,5], [23,5], [8,13,3], [7,1,3,7,2], [8,2,2,8], [8,1,4,2,4], [9,1,1,2,2], [12,1,4], [13,1,2], [13,3,1], [14,2,2], [14,1,1], [13,2,2], [14,1,2], [14,2], [20,7], [17,1,11], [14,1,8], [12,1,11], [12,12,2], [24,2], [13,9,3], [8,9,1], [8,1], [7,2], [6,2], [4,1]] 
-    n_r = [[6], [9], [11], [13], [16], [19], [23], [25], [25], [26], [26], [26], [6,16], [4,1,7,10], [4,1,8], [3,3,6,3,4], [3,1,1,2,1,2,3], [3,1,1,1,2,4], [3,1,1,1,3], [3,1,3,3], [3,1,1,3], [3,7], [3,2,9], [4,1,1,10], [4,1,1,11], [5,1,2,11], [4,3,12], [5,3,12], [8,12], [6,1,1,6], [4,2,1,1,2], [5,1,1,1,3], [8,2], [7,5], [6,3]]
-    nonogram = NonogramSolver(n_c, n_r)
-    nonogram.solve()
-    nonogram.print_solution()
+    # n_c =[[6,4], [9,4], [12,5], [20,5], [23,5], [8,13,3], [7,1,3,7,2], [8,2,2,8], [8,1,4,2,4], [9,1,1,2,2], [12,1,4], [13,1,2], [13,3,1], [14,2,2], [14,1,1], [13,2,2], [14,1,2], [14,2], [20,7], [17,1,11], [14,1,8], [12,1,11], [12,12,2], [24,2], [13,9,3], [8,9,1], [8,1], [7,2], [6,2], [4,1]] 
+    # n_r = [[6], [9], [11], [13], [16], [19], [23], [25], [25], [26], [26], [26], [6,16], [4,1,7,10], [4,1,8], [3,3,6,3,4], [3,1,1,2,1,2,3], [3,1,1,1,2,4], [3,1,1,1,3], [3,1,3,3], [3,1,1,3], [3,7], [3,2,9], [4,1,1,10], [4,1,1,11], [5,1,2,11], [4,3,12], [5,3,12], [8,12], [6,1,1,6], [4,2,1,1,2], [5,1,1,1,3], [8,2], [7,5], [6,3]]
+    # nonogram = NonogramSolver(n_c, n_r)
+    # nonogram.solve()
+    # nonogram.print_solution()
 
-    n_c = [[1,1,2], [2,2,3], [1,2,4], [2,2,2], [2,2,4,2,2], [18,3], [2,1,5,3], [3,2,3,4,3,1], [6,4,6,8], [4,3,3,3,3], [3,3,1,3,1], [2,4,1,2,3,1], [1,2,2,1,1,2,3], [1,5,1,2,2], [3,2,2,1,1,3], [6,4,2,1,1,3], [6,2,2,2,8,3], [4,5,1,2,4], [1,2,1,2,1,6,2], [2,1,3,3,5,1,3], [2,3,1,1,4,6,1], [4,3,4,3,6], [4,1,2,12,1], [3,2,2], [3,5], [3,5], [2,1,3], [1,2,2], [1,1], [1,1]]
-    n_r = [[1,2,2], [2,2,2], [2,3,2], [3,4,4], [4,4,4], [2,10,5], [3,3,5,3], [3,2,6,1,4], [4,11,4], [1,1,2,1,1,2,1,4], [5,11,4,6], [6,3,4,4,7], [6,1,3,1], [2,1,3,1], [2,1,3,1], [2,5,5], [2,3,1,2], [1,7,7], [2,2,3,2,3], [2,2,1,2,1], [2,2,1,4], [2,1,1,2,2], [2,3,3,5], [2,2,1,3,1], [5,1,2,1,3], [2,2,2,5], [2,2,8,2], [2,1,2,6,3], [3,2,2,6,1], [3,2,3,1,5]]
-    nonogram = NonogramSolver(n_c, n_r)
-    nonogram.solve()
-    nonogram.print_solution()
+    # n_c = [[1,1,2], [2,2,3], [1,2,4], [2,2,2], [2,2,4,2,2], [18,3], [2,1,5,3], [3,2,3,4,3,1], [6,4,6,8], [4,3,3,3,3], [3,3,1,3,1], [2,4,1,2,3,1], [1,2,2,1,1,2,3], [1,5,1,2,2], [3,2,2,1,1,3], [6,4,2,1,1,3], [6,2,2,2,8,3], [4,5,1,2,4], [1,2,1,2,1,6,2], [2,1,3,3,5,1,3], [2,3,1,1,4,6,1], [4,3,4,3,6], [4,1,2,12,1], [3,2,2], [3,5], [3,5], [2,1,3], [1,2,2], [1,1], [1,1]]
+    # n_r = [[1,2,2], [2,2,2], [2,3,2], [3,4,4], [4,4,4], [2,10,5], [3,3,5,3], [3,2,6,1,4], [4,11,4], [1,1,2,1,1,2,1,4], [5,11,4,6], [6,3,4,4,7], [6,1,3,1], [2,1,3,1], [2,1,3,1], [2,5,5], [2,3,1,2], [1,7,7], [2,2,3,2,3], [2,2,1,2,1], [2,2,1,4], [2,1,1,2,2], [2,3,3,5], [2,2,1,3,1], [5,1,2,1,3], [2,2,2,5], [2,2,8,2], [2,1,2,6,3], [3,2,2,6,1], [3,2,3,1,5]]
+    # nonogram = NonogramSolver(n_c, n_r)
+    # nonogram.solve()
+    # nonogram.print_solution()
 
-    n_r = [[3], [2,1], [3,2], [2,2], [6], [1,5], [6], [1], [2]]
-    n_c = [[1,2], [3,1], [1,5], [7,1], [5], [3], [4], [3]]
-    nonogram = NonogramSolver(n_c, n_r)
-    nonogram.solve()
-    nonogram.print_solution()
+    # n_r = [[3], [2,1], [3,2], [2,2], [6], [1,5], [6], [1], [2]]
+    # n_c = [[1,2], [3,1], [1,5], [7,1], [5], [3], [4], [3]]
+    # nonogram = NonogramSolver(n_c, n_r)
+    # nonogram.solve()
+    # nonogram.print_solution()
 
     n_c = [[7,3,1,1,7], [1,1,2,2,1,1], [1,3,1,3,1,1,3,1], [1,3,1,1,6,1,3,1], [1,3,1,5,2,1,3,1], [1,1,2,1,1], [7,1,1,1,1,1,7], [3,3], [1,2,3,1,1,3,1,1,2], [1,1,3,2,1,1], [4,1,4,2,1,2], [1,1,1,1,1,4,1,3], [2,1,1,1,2,5], [3,2,2,6,3,1], [1,9,1,1,2,1], [2,1,2,2,3,1], [3,1,1,1,1,5,1], [1,2,2,5], [7,1,2,1,1,1,3], [1,1,2,1,2,2,1], [1,3,1,4,5,1], [1,3,1,3,10,2], [1,3,1,1,6,6], [1,1,2,1,1,2], [7,2,1,2,5]]
     n_r = [[7,2,1,1,7], [1,1,2,2,1,1], [1,3,1,3,1,3,1,3,1], [1,3,1,1,5,1,3,1], [1,3,1,1,4,1,3,1], [1,1,1,2,1,1], [7,1,1,1,1,1,7], [1,1,3], [2,1,2,1,8,2,1], [2,2,1,2,1,1,1,2], [1,7,3,2,1], [1,2,3,1,1,1,1,1], [4,1,1,2,6], [3,3,1,1,1,3,1], [1,2,5,2,2], [2,2,1,1,1,1,1,2,1], [1,3,3,2,1,8,1], [6,2,1], [7,1,4,1,1,3], [1,1,1,1,4], [1,3,1,3,7,1], [1,3,1,1,1,2,1,1,4], [1,3,1,4,3,3], [1,1,2,2,2,6,1], [7,1,3,2,1,1]]    
